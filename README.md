@@ -59,8 +59,10 @@ It wrote the code, ran away, and now the game is unplayable.
 
 ## 📸 Demo
 
-- [ ] [Insert a screenshot of your fixed, winning game here]
+- [ ] <img width="2880" height="1562" alt="image" src="https://github.com/user-attachments/assets/126e5e12-72de-4cb4-884a-2c7d4ffd5923" />
+
 
 ## 🚀 Stretch Features
 
-- [ ] [If you choose to complete Challenge 4, insert a screenshot of your Enhanced Game UI here]
+- [ ] <img width="2880" height="1562" alt="image" src="https://github.com/user-attachments/assets/2ecd8459-3cd0-4a9d-b8b7-64e59ef88e42" />
+
