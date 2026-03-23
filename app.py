@@ -1,68 +1,7 @@
 import random
 import streamlit as st
-
-def get_range_for_difficulty(difficulty: str):
-    if difficulty == "Easy":
-        return 1, 20
-    if difficulty == "Normal":
-        return 1, 100
-    if difficulty == "Hard":
-        return 1, 50
-    return 1, 100
-
-
-def parse_guess(raw: str):
-    if raw is None:
-        return False, None, "Enter a guess."
-
-    if raw == "":
-        return False, None, "Enter a guess."
-
-    try:
-        if "." in raw:
-            value = int(float(raw))
-        else:
-            value = int(raw)
-    except Exception:
-        return False, None, "That is not a number."
-
-    return True, value, None
-
-
-def check_guess(guess, secret):
-    if guess == secret:
-        return "Win", "🎉 Correct!"
-
-    try:
-        if guess > secret:
-            return "Too High", "📈 Go HIGHER!"
-        else:
-            return "Too Low", "📉 Go LOWER!"
-    except TypeError:
-        g = str(guess)
-        if g == secret:
-            return "Win", "🎉 Correct!"
-        if g > secret:
-            return "Too High", "📈 Go HIGHER!"
-        return "Too Low", "📉 Go LOWER!"
-
-
-def update_score(current_score: int, outcome: str, attempt_number: int):
-    if outcome == "Win":
-        points = 100 - 10 * (attempt_number + 1)
-        if points < 10:
-            points = 10
-        return current_score + points
-
-    if outcome == "Too High":
-        if attempt_number % 2 == 0:
-            return current_score + 5
-        return current_score - 5
-
-    if outcome == "Too Low":
-        return current_score - 5
-
-    return current_score
+# FIX: Refactored all core game logic out of app.py into logic_utils.py using Claude Code Agent
+from logic_utils import get_range_for_difficulty, parse_guess, check_guess, update_score, get_attempt_limit, is_in_range, load_high_score, save_high_score
 
 st.set_page_config(page_title="Glitchy Guesser", page_icon="🎮")
 
@@ -77,23 +16,23 @@ difficulty = st.sidebar.selectbox(
     index=1,
 )
 
-attempt_limit_map = {
-    "Easy": 6,
-    "Normal": 8,
-    "Hard": 5,
-}
-attempt_limit = attempt_limit_map[difficulty]
+attempt_limit = get_attempt_limit(difficulty)  # FIX: replaced inline dict lookup with logic_utils function using Claude Code Agent
 
 low, high = get_range_for_difficulty(difficulty)
 
 st.sidebar.caption(f"Range: {low} to {high}")
 st.sidebar.caption(f"Attempts allowed: {attempt_limit}")
 
+# FEATURE: Load and display the all-time high score in the sidebar;
+# implemented via Claude Code Agent Mode
+st.sidebar.divider()
+st.sidebar.metric("🏆 High Score", load_high_score())
+
 if "secret" not in st.session_state:
     st.session_state.secret = random.randint(low, high)
 
 if "attempts" not in st.session_state:
-    st.session_state.attempts = 1
+    st.session_state.attempts = 0  # FIX: was initialized to 1, causing one attempt to be lost on start; corrected with Claude Code
 
 if "score" not in st.session_state:
     st.session_state.score = 0
@@ -104,36 +43,62 @@ if "status" not in st.session_state:
 if "history" not in st.session_state:
     st.session_state.history = []
 
+if "last_hint" not in st.session_state:
+    st.session_state.last_hint = None
+
+# FIX: track active difficulty so switching it resets the game with a valid secret; identified and fixed with Claude Code
+if "current_difficulty" not in st.session_state:
+    st.session_state.current_difficulty = difficulty
+
+if st.session_state.current_difficulty != difficulty:
+    st.session_state.current_difficulty = difficulty
+    st.session_state.secret = random.randint(low, high)
+    st.session_state.attempts = 0
+    st.session_state.status = "playing"
+    st.session_state.history = []
+    st.session_state.last_hint = None
+
 st.subheader("Make a guess")
 
-st.info(
-    f"Guess a number between 1 and 100. "
+# FIX: use st.empty() placeholder so the display updates correctly after the submit increment
+# on the same render pass; identified and fixed with Claude Code
+attempts_info = st.empty()
+attempts_info.info(
+    f"Guess a number between {low} and {high}. "  # FIX: was hardcoded to "1 and 100" regardless of difficulty; corrected with Claude Code
     f"Attempts left: {attempt_limit - st.session_state.attempts}"
 )
 
+# FIX: expander stays here (original position) to preserve open/closed state across reruns;
+# st.empty() placeholders inside are filled after the submit handler so values stay current; fixed with Claude Code
 with st.expander("Developer Debug Info"):
-    st.write("Secret:", st.session_state.secret)
-    st.write("Attempts:", st.session_state.attempts)
-    st.write("Score:", st.session_state.score)
-    st.write("Difficulty:", difficulty)
-    st.write("History:", st.session_state.history)
+    dbg_secret   = st.empty()
+    dbg_attempts = st.empty()
+    dbg_score    = st.empty()
+    dbg_diff     = st.empty()
+    dbg_history  = st.empty()
 
-raw_guess = st.text_input(
-    "Enter your guess:",
-    key=f"guess_input_{difficulty}"
-)
+# FIX: wrapped input and submit in st.form so pressing Enter triggers submission; identified and fixed with Claude Code
+with st.form("guess_form"):
+    raw_guess = st.text_input(
+        "Enter your guess:",
+        key=f"guess_input_{difficulty}"
+    )
+    submit = st.form_submit_button("Submit Guess 🚀")
 
-col1, col2, col3 = st.columns(3)
+col1, col2 = st.columns(2)
 with col1:
-    submit = st.button("Submit Guess 🚀")
-with col2:
     new_game = st.button("New Game 🔁")
-with col3:
+with col2:
     show_hint = st.checkbox("Show hint", value=True)
+
+hint_slot = st.empty()
 
 if new_game:
     st.session_state.attempts = 0
-    st.session_state.secret = random.randint(1, 100)
+    st.session_state.status = "playing"  # FIX: status was never reset on new game so won/lost state persisted; fixed with Claude Code
+    st.session_state.history = []
+    st.session_state.last_hint = None
+    st.session_state.secret = random.randint(low, high)  # FIX: was hardcoded to randint(1, 100), ignoring difficulty; corrected with Claude Code
     st.success("New game started.")
     st.rerun()
 
@@ -145,25 +110,26 @@ if st.session_state.status != "playing":
     st.stop()
 
 if submit:
-    st.session_state.attempts += 1
-
     ok, guess_int, err = parse_guess(raw_guess)
 
     if not ok:
-        st.session_state.history.append(raw_guess)
         st.error(err)
+    elif not is_in_range(guess_int, low, high):  # FIX: out-of-range guesses were silently accepted; identified and fixed with Claude Code
+        st.error(f"Please enter a number between {low} and {high}.")
     else:
+        st.session_state.attempts += 1  # FIX: moved increment here so invalid/out-of-range guesses don't waste an attempt; fixed with Claude Code
         st.session_state.history.append(guess_int)
 
-        if st.session_state.attempts % 2 == 0:
-            secret = str(st.session_state.secret)
-        else:
-            secret = st.session_state.secret
+        # FIX: refresh the attempts display after incrementing so the correct count shows this run; fixed with Claude Code
+        attempts_info.info(
+            f"Guess a number between {low} and {high}. "
+            f"Attempts left: {attempt_limit - st.session_state.attempts}"
+        )
+
+        secret = st.session_state.secret  # FIX: was cast to str on even attempts, breaking numeric comparison; corrected with Claude Code
 
         outcome, message = check_guess(guess_int, secret)
-
-        if show_hint:
-            st.warning(message)
+        st.session_state.last_hint = message
 
         st.session_state.score = update_score(
             current_score=st.session_state.score,
@@ -174,6 +140,7 @@ if submit:
         if outcome == "Win":
             st.balloons()
             st.session_state.status = "won"
+            save_high_score(st.session_state.score)  # FEATURE: persist best score to file; implemented via Claude Code Agent Mode
             st.success(
                 f"You won! The secret was {st.session_state.secret}. "
                 f"Final score: {st.session_state.score}"
@@ -186,6 +153,15 @@ if submit:
                     f"The secret was {st.session_state.secret}. "
                     f"Score: {st.session_state.score}"
                 )
+
+if show_hint and st.session_state.last_hint:
+    hint_slot.warning(st.session_state.last_hint)
+
+dbg_secret.write("Secret: " + str(st.session_state.secret))
+dbg_attempts.write("Attempts: " + str(st.session_state.attempts))
+dbg_score.write("Score: " + str(st.session_state.score))
+dbg_diff.write("Difficulty: " + difficulty)
+dbg_history.write("History: " + str(st.session_state.history))
 
 st.divider()
 st.caption("Built by an AI that claims this code is production-ready.")
